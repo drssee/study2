@@ -11,14 +11,14 @@ import java.util.Optional;
 import static org.springframework.jdbc.support.JdbcUtils.*;
 
 /**
- * JDBC - DataSource 사용, JdbcUtils 사용
+ * JDBC - ConnectionParam
  */
 @Slf4j
-public class MemberRepositoryV1 {
+public class MemberRepositoryV2 {
 
     private final DataSource dataSource; //추상화된 커넥션풀에서 커넥션을 얻기위한 인터페이스
 
-    public MemberRepositoryV1(DataSource dataSource) {
+    public MemberRepositoryV2(DataSource dataSource) {
         this.dataSource = dataSource;
     }
 
@@ -74,6 +74,38 @@ public class MemberRepositoryV1 {
 
     }
 
+    public Member findById(Connection con, String memberId) throws SQLException {
+        String sql = "select * from member where member_id = ?";
+
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+
+        try {
+            pstmt = con.prepareStatement(sql);
+            pstmt.setString(1, memberId);
+
+            rs = pstmt.executeQuery(); //select는 query 나머진 update
+            if (rs.next()) { //rs의 포인터는 처음 컬럼명을 가리키고 있음 next호출해 실제 데이터로 이동시켜야함
+                Member member = new Member();
+                member.setMemberId(rs.getString("member_id"));
+                member.setMoney(rs.getInt("money"));
+                return member;
+            } else {
+                throw new NoSuchElementException("member not found memberId="+memberId);
+            }
+
+        } catch (SQLException e) {
+            log.error("db error", e);
+            throw e;
+        } finally {
+            //connection은 여기서 닫지 않는다
+            closeResultSet(rs);
+            closeStatement(pstmt);
+//            closeConnection(con);
+        }
+
+    }
+
     public void update(String memberId, int money) throws SQLException {
         String sql = "update member set money=? where member_id=?";
 
@@ -92,6 +124,27 @@ public class MemberRepositoryV1 {
             throw e;
         } finally {
             close(con, pstmt, null);
+        }
+    }
+
+    public void update(Connection con, String memberId, int money) throws SQLException {
+        String sql = "update member set money=? where member_id=?";
+
+        PreparedStatement pstmt = null;
+
+        try {
+            pstmt = con.prepareStatement(sql);
+            pstmt.setInt(1, money);
+            pstmt.setString(2, memberId);
+            int resultSize = pstmt.executeUpdate();
+            log.info("resultSize={}", Optional.of(resultSize));
+        } catch (SQLException e) {
+            log.error("db error", e);
+            throw e;
+        } finally {
+            //connection은 여기서 닫지 않는다
+            closeStatement(pstmt);
+//            closeConnection(con);
         }
     }
 
